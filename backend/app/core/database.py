@@ -1,4 +1,5 @@
 from typing import AsyncGenerator
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 from app.core.config import settings
@@ -22,17 +23,33 @@ engine_kwargs = {
 if "asyncpg" in db_url:
     # 1. Disable prepared statement cache for Neon PgBouncer transaction pooling
     connect_args["statement_cache_size"] = 0
-    # 2. SSL requirement for Neon
-    if "sslmode=require" in db_url or "neon.tech" in db_url:
+
+    # 2. Parse and clean query params because asyncpg does not accept sslmode/channel_binding in query string
+    parsed = urlparse(db_url)
+    query_params = parse_qs(parsed.query)
+
+    needs_ssl = "neon.tech" in db_url or "sslmode" in query_params or "ssl" in query_params
+    if needs_ssl:
         connect_args["ssl"] = "require"
-    
-    engine_kwargs.update({
-        "connect_args": connect_args,
-        "pool_pre_ping": settings.DB_POOL_PRE_PING,
-        "pool_recycle": settings.DB_POOL_RECYCLE_SECONDS,
-        "pool_size": settings.DB_POOL_SIZE,
-        "max_overflow": settings.DB_MAX_OVERFLOW,
-    })
+
+    # Remove sslmode, channel_binding, etc. from query string so asyncpg doesn't error out
+    cleaned_query = {k: v for k, v in query_params.items() if k not in ["sslmode", "channel_binding", "ssl"]}
+    new_query_str = urlencode({k: v[0] for k, v in cleaned_query.items()}) if cleaned_query else ""
+    db_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query_str, parsed.fragment))
+
+    import os
+    if os.getenv("TESTING") == "1" or settings.ENVIRONMENT == "testing":
+        from sqlalchemy.pool import NullPool
+        engine_kwargs["poolclass"] = NullPool
+        engine_kwargs["connect_args"] = connect_args
+    else:
+        engine_kwargs.update({
+            "connect_args": connect_args,
+            "pool_pre_ping": settings.DB_POOL_PRE_PING,
+            "pool_recycle": settings.DB_POOL_RECYCLE_SECONDS,
+            "pool_size": settings.DB_POOL_SIZE,
+            "max_overflow": settings.DB_MAX_OVERFLOW,
+        })
 elif "sqlite" in db_url:
     connect_args["check_same_thread"] = False
     engine_kwargs["connect_args"] = connect_args

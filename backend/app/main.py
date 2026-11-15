@@ -28,13 +28,17 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Initializing PulseOps Application...")
     await init_db()
-    await health_worker.start()
-    logger.info("PulseOps backend service fully operational.")
+    
+    is_testing = os.getenv("TESTING") == "1" or settings.ENVIRONMENT == "testing"
+    if not is_testing:
+        await health_worker.start()
+        logger.info("PulseOps backend service fully operational.")
 
     yield
 
     logger.info("Shutting down PulseOps backend service...")
-    await health_worker.stop()
+    if not is_testing:
+        await health_worker.stop()
     await alert_dispatcher.close()
     logger.info("PulseOps shutdown completed cleanly.")
 
@@ -49,10 +53,11 @@ app = FastAPI(
 )
 
 # Configure CORS explicitly for Vercel production & preview domains
+cors_list = settings.cors_origins_list
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS if settings.CORS_ORIGINS != ["*"] else ["*"],
-    allow_origin_regex=r"https://.*\.vercel\.app" if "*" not in settings.CORS_ORIGINS else None,
+    allow_origins=cors_list if cors_list != ["*"] else ["*"],
+    allow_origin_regex=r"https://.*\.vercel\.app" if "*" not in cors_list else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

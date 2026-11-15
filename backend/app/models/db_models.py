@@ -13,6 +13,7 @@ from sqlalchemy import (
     CheckConstraint,
     UniqueConstraint,
     Index,
+    Uuid,
 )
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -22,10 +23,14 @@ def utcnow():
     return datetime.now(timezone.utc)
 
 
+def generate_uuid_str():
+    return str(uuid.uuid4())
+
+
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(Uuid(as_uuid=False), primary_key=True, default=generate_uuid_str)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     role = Column(String(50), nullable=False, default="viewer")
@@ -40,7 +45,7 @@ class User(Base):
 class Project(Base):
     __tablename__ = "projects"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(Uuid(as_uuid=False), primary_key=True, default=generate_uuid_str)
     name = Column(String(255), nullable=False)
     slug = Column(String(100), unique=True, nullable=False, index=True)
     repo_url = Column(String(500), nullable=False)
@@ -62,8 +67,8 @@ class Project(Base):
 class Deployment(Base):
     __tablename__ = "deployments"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(Uuid(as_uuid=False), primary_key=True, default=generate_uuid_str)
+    project_id = Column(Uuid(as_uuid=False), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
     environment = Column(String(50), nullable=False)  # 'development', 'testing', 'staging', 'production'
     commit_sha = Column(String(64), nullable=False, index=True)
     commit_message = Column(Text, nullable=True)
@@ -87,8 +92,8 @@ class Deployment(Base):
 class HealthTarget(Base):
     __tablename__ = "health_targets"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(Uuid(as_uuid=False), primary_key=True, default=generate_uuid_str)
+    project_id = Column(Uuid(as_uuid=False), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
     environment = Column(String(50), nullable=False)
     endpoint_url = Column(String(1000), nullable=False)
     check_interval_seconds = Column(Integer, default=60, nullable=False)
@@ -115,7 +120,7 @@ class HealthLog(Base):
     __tablename__ = "health_logs"
 
     id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
-    target_id = Column(String(36), ForeignKey("health_targets.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_id = Column(Uuid(as_uuid=False), ForeignKey("health_targets.id", ondelete="CASCADE"), nullable=False, index=True)
     status_code = Column(Integer, nullable=True)
     latency_ms = Column(Float, nullable=False)
     is_up = Column(Boolean, nullable=False)
@@ -132,8 +137,8 @@ class HealthLog(Base):
 class AlertConfig(Base):
     __tablename__ = "alert_configs"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    project_id = Column(String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(Uuid(as_uuid=False), primary_key=True, default=generate_uuid_str)
+    project_id = Column(Uuid(as_uuid=False), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
     channel_type = Column(String(50), nullable=False)  # 'slack', 'teams', 'email', 'webhook'
     destination_url_encrypted = Column(Text, nullable=False)
     notify_on_deployment_fail = Column(Boolean, default=True, nullable=False)
@@ -150,8 +155,8 @@ class AlertConfig(Base):
 class Incident(Base):
     __tablename__ = "incidents"
 
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    target_id = Column(String(36), ForeignKey("health_targets.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(Uuid(as_uuid=False), primary_key=True, default=generate_uuid_str)
+    target_id = Column(Uuid(as_uuid=False), ForeignKey("health_targets.id", ondelete="CASCADE"), nullable=False, index=True)
     started_at = Column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
     status = Column(String(50), default="open", nullable=False)  # 'open', 'resolved'

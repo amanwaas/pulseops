@@ -30,18 +30,20 @@ class Settings(BaseSettings):
     JWT_EXPIRES_MINUTES: int = 60 * 24  # 24 hours
 
     # CORS Settings (Explicitly allowing Vercel production + preview domains)
-    CORS_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://*.vercel.app",
-    ]
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,https://*.vercel.app"
 
-    @field_validator("CORS_ORIGINS", mode="before")
-    @classmethod
-    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",") if i.strip()]
-        return v
+    @property
+    def cors_origins_list(self) -> List[str]:
+        val = str(self.CORS_ORIGINS).strip()
+        if val.startswith("[") and val.endswith("]"):
+            import json
+            try:
+                parsed = json.loads(val)
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception:
+                pass
+        return [i.strip() for i in val.split(",") if i.strip()]
 
     # Health Checking & Alerting Engine Configuration
     HEALTH_CHECK_DEFAULT_INTERVAL_SECONDS: int = 60
