@@ -1,0 +1,55 @@
+# ==============================================================================
+# Sample GitLab CI/CD Pipeline: Deployment with PulseOps Webhook Ping
+# Save as: .gitlab-ci.yml
+# ==============================================================================
+
+stages:
+  - test
+  - deploy
+  - notify
+
+variables:
+  PULSEOPS_HOST: "https://pulseops-backend.onrender.com"
+  PULSEOPS_PROJECT_ID: "b0000000-0000-0000-0000-000000000002"
+  # Set PULSEOPS_WEBHOOK_SECRET in GitLab Settings > CI/CD > Variables (Masked)
+
+deploy-production:
+  stage: deploy
+  environment:
+    name: production
+    url: https://api.myproject.com
+  only:
+    - main
+  before_script:
+    - export DEPLOY_START=$(date +%s)
+  script:
+    - echo "Executing production rollout..."
+    - sleep 2
+    - echo "Deployment complete."
+  after_script:
+    - |
+      DEPLOY_END=$(date +%s)
+      DURATION=$((DEPLOY_END - DEPLOY_START))
+      STATUS=$([ "$CI_JOB_STATUS" = "success" ] && echo "success" || echo "failure")
+
+      PAYLOAD=$(cat <<EOF
+      {
+        "environment": "production",
+        "commit_sha": "$CI_COMMIT_SHA",
+        "commit_message": "$CI_COMMIT_TITLE",
+        "branch": "$CI_COMMIT_REF_NAME",
+        "author": "$GITLAB_USER_NAME",
+        "status": "$STATUS",
+        "duration_seconds": $DURATION,
+        "pipeline_id": "$CI_PIPELINE_ID",
+        "pipeline_url": "$CI_PIPELINE_URL"
+      }
+      EOF
+      )
+
+      curl -s -X POST \
+        "${PULSEOPS_HOST}/api/v1/webhooks/gitlab/${PULSEOPS_PROJECT_ID}" \
+        -H "Content-Type: application/json" \
+        -H "X-Gitlab-Token: ${PULSEOPS_WEBHOOK_SECRET}" \
+        -H "X-Gitlab-Event: Deployment Hook" \
+        -d "$PAYLOAD"

@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: pulseops-backend
+    env: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    plan: starter # Render Persistent Web Service (does not sleep)
+    region: oregon # or frankfurt/ohio
+    healthCheckPath: /healthz
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false # Set in Render Dashboard: e.g. postgresql+asyncpg://user:pass@ep-xyz-pooler.c-2.postgres.neon.tech/neondb?sslmode=require
+      - key: ENCRYPTION_KEY
+        generateValue: true # Generates secure 32-byte key
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: "https://pulseops.vercel.app,https://*.vercel.app"
+      - key: DB_POOL_SIZE
+        value: "10"
+      - key: DB_MAX_OVERFLOW
+        value: "20"
+      - key: DB_POOL_RECYCLE_SECONDS
+        value: "300"
