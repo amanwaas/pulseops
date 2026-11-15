@@ -27,12 +27,20 @@ class HealthWorker:
         # Explicit In-Flight State Tracking (Target ID -> Probing)
         self._in_flight_targets: Set[str] = set()
 
-    async def start(self):
+    async def start(self, startup_delay_seconds: float = 10.0):
+        """
+        Start the background worker.
+        startup_delay_seconds: Wait before first probe tick to let the DB
+        connection pool warm up after a cold start (Render free tier / Neon wake-up).
+        """
         if self._is_running:
             return
         self._is_running = True
-        self._task = asyncio.create_task(self._run_loop())
-        logger.info("PulseOps background Health & Retention worker started.")
+        self._task = asyncio.create_task(self._run_loop(startup_delay_seconds))
+        logger.info(
+            f"PulseOps background Health & Retention worker started "
+            f"(startup grace period: {startup_delay_seconds}s)."
+        )
 
     async def stop(self):
         self._is_running = False
@@ -45,7 +53,12 @@ class HealthWorker:
         await health_checker.close()
         logger.info("PulseOps background Health worker stopped.")
 
-    async def _run_loop(self):
+    async def _run_loop(self, startup_delay_seconds: float = 10.0):
+        # Grace period: let DB pool warm up after cold start (Render free tier / Neon wake)
+        if startup_delay_seconds > 0:
+            logger.info(f"Worker startup grace period: sleeping {startup_delay_seconds}s before first probe...")
+            await asyncio.sleep(startup_delay_seconds)
+
         while self._is_running:
             try:
                 now = datetime.now(timezone.utc)
