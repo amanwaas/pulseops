@@ -22,6 +22,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectProject }) => {
   const [newSlug, setNewSlug] = useState('');
   const [newRepo, setNewRepo] = useState('');
   const [newProvider, setNewProvider] = useState<'github' | 'gitlab'>('github');
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   // React Query with auto-refresh every 30s as safety net alongside WebSockets
   const {
@@ -43,20 +45,46 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectProject }) => {
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
+    setCreateError(null);
+    setIsCreating(true);
+
     try {
+      const cleanSlug = (newSlug || newName)
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+
+      let cleanRepo = newRepo.trim();
+      if (cleanRepo && !cleanRepo.startsWith('http://') && !cleanRepo.startsWith('https://')) {
+        cleanRepo = `https://${cleanRepo}`;
+      }
+
       await api.projects.create({
-        name: newName,
-        slug: newSlug || newName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-        repo_url: newRepo,
+        name: newName.trim(),
+        slug: cleanSlug || `project-${Math.random().toString(36).substring(2, 7)}`,
+        repo_url: cleanRepo,
         provider: newProvider,
       });
+
       setShowCreateModal(false);
       setNewName('');
       setNewSlug('');
       setNewRepo('');
       refetchProjects();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create project', err);
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        setCreateError(detail.map((d: any) => `${d.loc?.slice(1).join('.') || 'field'}: ${d.msg}`).join(', '));
+      } else if (typeof detail === 'string') {
+        setCreateError(detail);
+      } else {
+        setCreateError(err.message || 'Failed to create project. Please check your inputs.');
+      }
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -215,6 +243,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectProject }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-surface-800 bg-surface-900 p-6 shadow-2xl space-y-4">
             <h2 className="text-base font-bold text-white">Register New Monitored Project</h2>
+
+            {createError && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{createError}</span>
+              </div>
+            )}
+
             <form onSubmit={handleCreateProject} className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Project Name</label>
@@ -226,7 +262,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectProject }) => {
                   onChange={(e) => {
                     setNewName(e.target.value);
                     if (!newSlug) {
-                      setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '-'));
+                      setNewSlug(e.target.value.toLowerCase().trim().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-'));
                     }
                   }}
                   className="w-full px-3 py-2 rounded-xl bg-surface-950 border border-surface-800 text-xs text-slate-200"
@@ -240,7 +276,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectProject }) => {
                   required
                   placeholder="order-processing-service"
                   value={newSlug}
-                  onChange={(e) => setNewSlug(e.target.value)}
+                  onChange={(e) => setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
                   className="w-full px-3 py-2 rounded-xl bg-surface-950 border border-surface-800 text-xs font-mono text-slate-200"
                 />
               </div>
@@ -260,7 +296,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectProject }) => {
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Repository URL</label>
                 <input
-                  type="url"
+                  type="text"
                   required
                   placeholder="https://github.com/myorg/order-processing"
                   value={newRepo}
@@ -272,16 +308,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectProject }) => {
               <div className="flex items-center justify-end gap-2 pt-3">
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setCreateError(null);
+                  }}
                   className="px-3.5 py-2 rounded-xl text-xs text-slate-400 hover:text-white"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold"
+                  disabled={isCreating}
+                  className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold disabled:opacity-50"
                 >
-                  Create Project
+                  {isCreating ? 'Creating...' : 'Create Project'}
                 </button>
               </div>
             </form>

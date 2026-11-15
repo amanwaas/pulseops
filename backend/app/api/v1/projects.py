@@ -155,16 +155,26 @@ async def create_project(
     user: dict = Depends(require_admin),
 ):
     """Creates a new project and generates its encrypted HMAC signing secret."""
-    slug_check = await db.execute(select(Project).where(Project.slug == project_in.slug))
+    import re
+    # Resolve slug if omitted or empty
+    slug = project_in.slug
+    if not slug:
+        slug = re.sub(r"[^a-zA-Z0-9-]", "-", project_in.name.lower().strip())
+        slug = re.sub(r"-+", "-", slug).strip("-")
+    if not slug:
+        slug = f"project-{secrets.token_hex(4)}"
+
+    # If slug already exists, auto-append a short unique suffix instead of failing
+    slug_check = await db.execute(select(Project).where(Project.slug == slug))
     if slug_check.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="A project with this slug already exists.")
+        slug = f"{slug}-{secrets.token_hex(3)}"
 
     secret = project_in.webhook_secret or secrets.token_hex(24)
     encrypted_secret = encryption_service.encrypt(secret)
 
     project = Project(
         name=project_in.name,
-        slug=project_in.slug,
+        slug=slug,
         repo_url=project_in.repo_url,
         provider=project_in.provider,
         webhook_secret_encrypted=encrypted_secret,

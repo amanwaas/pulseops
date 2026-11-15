@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List, Literal
-from pydantic import BaseModel, Field, EmailStr, HttpUrl, ConfigDict
+from pydantic import BaseModel, Field, EmailStr, HttpUrl, ConfigDict, field_validator
 
 
 # ---------------------------------------------------------
@@ -35,11 +35,35 @@ class TokenResponse(BaseModel):
 # Project Schemas
 # ---------------------------------------------------------
 class ProjectCreate(BaseModel):
-    name: str = Field(..., min_length=2, max_length=255)
-    slug: str = Field(..., min_length=2, max_length=100, pattern=r"^[a-z0-9-]+$")
+    name: str = Field(..., min_length=1, max_length=255)
+    slug: Optional[str] = None
     repo_url: str = Field(..., max_length=500)
-    provider: Literal["github", "gitlab"]
+    provider: Literal["github", "gitlab"] = "github"
     webhook_secret: Optional[str] = None  # If not provided, backend generates secure secret
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def sanitize_name(cls, v: str) -> str:
+        return str(v).strip() if v else ""
+
+    @field_validator("slug", mode="before")
+    @classmethod
+    def sanitize_slug(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        import re
+        s = re.sub(r"[^a-zA-Z0-9-]", "-", str(v).lower().strip())
+        s = re.sub(r"-+", "-", s).strip("-")
+        return s or None
+
+    @field_validator("repo_url", mode="before")
+    @classmethod
+    def sanitize_repo_url(cls, v: str) -> str:
+        if isinstance(v, str):
+            v = v.strip()
+            if v and not v.startswith(("http://", "https://")):
+                return f"https://{v}"
+        return v or "https://github.com/placeholder"
 
 
 class ProjectUpdate(BaseModel):

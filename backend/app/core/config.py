@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     JWT_EXPIRES_MINUTES: int = 60 * 24  # 24 hours
 
     # CORS Settings (Explicitly allowing Vercel production + preview domains)
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,https://*.vercel.app"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,https://pulseops-m.vercel.app,https://*.vercel.app"
 
     @property
     def cors_origins_list(self) -> List[str]:
